@@ -1,10 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // このプロジェクトをルートにして lockfile 警告を抑制
-  turbopack: {
-    root: __dirname,
-  },
+  // ファイルトレースのルートをこのプロジェクトに固定（複数 lockfile 警告の抑制 / Vercel での出力ファイル収集を安定化）
+  outputFileTracingRoot: __dirname,
 };
 
 export default nextConfig;
