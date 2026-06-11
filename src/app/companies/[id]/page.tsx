@@ -1,0 +1,508 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import {
+  ArrowLeft,
+  ExternalLink,
+  Star,
+  Plus,
+  Trash2,
+  ChevronUp,
+  ChevronDown,
+  Save,
+  Link2,
+} from "lucide-react";
+import { getSupabase } from "@/lib/supabase/client";
+import { useAuth } from "@/components/useAuth";
+import type { Company, CompanyStatus, Step, StepStatus } from "@/lib/types";
+import { STATUS_LABELS, STEP_STATUS_LABELS } from "@/lib/types";
+import { normalizeUrl, openUrl } from "@/lib/url";
+import { countdownLabel, daysUntil, deadlineTone, TONE_CLASSES } from "@/lib/dates";
+import {
+  Button,
+  Card,
+  Field,
+  PageHeader,
+  Spinner,
+  inputClass,
+} from "@/components/ui";
+import FlowProgress from "@/components/FlowProgress";
+
+const stepStatusColor: Record<StepStatus, string> = {
+  pending: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
+  current: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+  done: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+  failed: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+};
+
+function toDateInput(v: string | null): string {
+  if (!v) return "";
+  return v.length >= 10 ? v.slice(0, 10) : v;
+}
+function toDateTimeInput(v: string | null): string {
+  if (!v) return "";
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
+}
+
+export default function CompanyDetailPage() {
+  const params = useParams<{ id: string }>();
+  const id = params.id;
+  const router = useRouter();
+  const { ready, configured, userId } = useAuth();
+
+  const [company, setCompany] = useState<Company | null>(null);
+  const [steps, setSteps] = useState<Step[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [savingInfo, setSavingInfo] = useState(false);
+  const [newStep, setNewStep] = useState("");
+
+  const load = useCallback(async () => {
+    if (!configured) return;
+    const supabase = getSupabase();
+    const [c, s] = await Promise.all([
+      supabase.from("companies").select("*").eq("id", id).single(),
+      supabase.from("steps").select("*").eq("company_id", id).order("order_index"),
+    ]);
+    setCompany((c.data as Company) ?? null);
+    setSteps((s.data as Step[]) ?? []);
+    setLoading(false);
+  }, [configured, id]);
+
+  useEffect(() => {
+    // データ取得（外部システム＝Supabase との同期）。fetch 後の setState は本ルールの対象外運用とする。
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (ready) load();
+  }, [ready, load]);
+
+  function patchCompany(patch: Partial<Company>) {
+    setCompany((c) => (c ? { ...c, ...patch } : c));
+  }
+
+  async function saveInfo() {
+    if (!company) return;
+    setSavingInfo(true);
+    await getSupabase()
+      .from("companies")
+      .update({
+        name: company.name,
+        industry: company.industry,
+        priority: company.priority,
+        status: company.status,
+        mypage_url: company.mypage_url,
+        webtest_url: company.webtest_url,
+        webtest_deadline: company.webtest_deadline || null,
+        webtest_done: company.webtest_done,
+        memo: company.memo,
+      })
+      .eq("id", company.id);
+    setSavingInfo(false);
+  }
+
+  async function toggleWebtestDone() {
+    if (!company) return;
+    const v = !company.webtest_done;
+    patchCompany({ webtest_done: v });
+    await getSupabase().from("companies").update({ webtest_done: v }).eq("id", company.id);
+  }
+
+  // ---- ステップ操作 ----
+  async function addStep() {
+    if (!userId || !newStep.trim()) return;
+    const order = steps.length ? Math.max(...steps.map((s) => s.order_index)) + 1 : 0;
+    const { data } = await getSupabase()
+      .from("steps")
+      .insert({
+        company_id: id,
+        user_id: userId,
+        name: newStep.trim(),
+        order_index: order,
+        status: "pending",
+      })
+      .select()
+      .single();
+    if (data) setSteps((prev) => [...prev, data as Step]);
+    setNewStep("");
+  }
+
+  async function updateStep(stepId: string, patch: Partial<Step>) {
+    setSteps((prev) => prev.map((s) => (s.id === stepId ? { ...s, ...patch } : s)));
+    await getSupabase().from("steps").update(patch).eq("id", stepId);
+  }
+
+  async function deleteStep(stepId: string) {
+    setSteps((prev) => prev.filter((s) => s.id !== stepId));
+    await getSupabase().from("steps").delete().eq("id", stepId);
+  }
+
+  async function move(stepId: string, dir: -1 | 1) {
+    const ordered = [...steps].sort((a, b) => a.order_index - b.order_index);
+    const idx = ordered.findIndex((s) => s.id === stepId);
+    const swap = idx + dir;
+    if (swap < 0 || swap >= ordered.length) return;
+    const a = ordered[idx];
+    const b = ordered[swap];
+    const ao = a.order_index;
+    const bo = b.order_index;
+    setSteps((prev) =>
+      prev.map((s) =>
+        s.id === a.id ? { ...s, order_index: bo } : s.id === b.id ? { ...s, order_index: ao } : s
+      )
+    );
+    const supabase = getSupabase();
+    await Promise.all([
+      supabase.from("steps").update({ order_index: bo }).eq("id", a.id),
+      supabase.from("steps").update({ order_index: ao }).eq("id", b.id),
+    ]);
+  }
+
+  async function removeCompany() {
+    if (!company || !confirm("この企業を削除しますか？")) return;
+    await getSupabase().from("companies").delete().eq("id", company.id);
+    router.push("/companies");
+  }
+
+  if (!ready || (configured && loading)) return <Spinner />;
+
+  if (!company) {
+    return (
+      <div>
+        <Button variant="ghost" onClick={() => router.push("/companies")}>
+          <ArrowLeft size={16} /> 戻る
+        </Button>
+        <p className="mt-6 text-slate-500">
+          {configured ? "企業が見つかりません。" : "Supabase 未設定のため表示できません。"}
+        </p>
+      </div>
+    );
+  }
+
+  const ordered = [...steps].sort((a, b) => a.order_index - b.order_index);
+  const wtDays = daysUntil(company.webtest_deadline);
+
+  return (
+    <div>
+      <button
+        onClick={() => router.push("/companies")}
+        className="mb-4 flex items-center gap-1 text-sm text-slate-500 hover:text-brand-sky"
+      >
+        <ArrowLeft size={16} /> 企業一覧へ
+      </button>
+
+      <PageHeader
+        title={company.name}
+        subtitle={company.industry || "業界未設定"}
+        action={
+          <Button variant="danger" onClick={removeCompany}>
+            <Trash2 size={16} /> 削除
+          </Button>
+        }
+      />
+
+      {/* 進捗バー */}
+      <Card className="mb-6">
+        <p className="mb-3 text-sm font-semibold">選考フロー進捗</p>
+        <FlowProgress steps={steps} />
+      </Card>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* 企業情報 */}
+        <Card>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-bold">企業情報</h2>
+            <Button onClick={saveInfo} disabled={savingInfo}>
+              <Save size={15} /> {savingInfo ? "保存中…" : "保存"}
+            </Button>
+          </div>
+
+          <div className="space-y-4">
+            <Field label="企業名">
+              <input
+                value={company.name}
+                onChange={(e) => patchCompany({ name: e.target.value })}
+                className={inputClass}
+              />
+            </Field>
+            <Field label="業界">
+              <input
+                value={company.industry ?? ""}
+                onChange={(e) => patchCompany({ industry: e.target.value })}
+                className={inputClass}
+              />
+            </Field>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="志望度">
+                <div className="flex">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <button
+                      type="button"
+                      key={i}
+                      onClick={() => patchCompany({ priority: i + 1 })}
+                      className="p-0.5"
+                      aria-label={`志望度${i + 1}`}
+                    >
+                      <Star
+                        size={22}
+                        className={
+                          i < company.priority
+                            ? "fill-amber-400 text-amber-400"
+                            : "text-slate-300 dark:text-slate-600"
+                        }
+                      />
+                    </button>
+                  ))}
+                </div>
+              </Field>
+              <Field label="ステータス">
+                <select
+                  value={company.status}
+                  onChange={(e) => patchCompany({ status: e.target.value as CompanyStatus })}
+                  className={inputClass}
+                >
+                  {Object.entries(STATUS_LABELS).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+
+            {/* マイページURL */}
+            <Field label="マイページURL">
+              <div className="flex gap-2">
+                <input
+                  value={company.mypage_url ?? ""}
+                  onChange={(e) => patchCompany({ mypage_url: e.target.value })}
+                  className={inputClass}
+                  placeholder="https://mypage.example.com"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!normalizeUrl(company.mypage_url)}
+                  onClick={() => openUrl(company.mypage_url)}
+                  className="shrink-0"
+                >
+                  <ExternalLink size={15} /> 開く
+                </Button>
+              </div>
+            </Field>
+
+            {/* WebテストURL */}
+            <Field label="WebテストURL">
+              <div className="flex gap-2">
+                <input
+                  value={company.webtest_url ?? ""}
+                  onChange={(e) => patchCompany({ webtest_url: e.target.value })}
+                  className={inputClass}
+                  placeholder="https://webtest.example.com"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!normalizeUrl(company.webtest_url)}
+                  onClick={() => openUrl(company.webtest_url)}
+                  className="shrink-0"
+                >
+                  <ExternalLink size={15} /> 開く
+                </Button>
+              </div>
+            </Field>
+
+            {/* Webテスト締切 */}
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Webテスト締切">
+                <input
+                  type="date"
+                  value={toDateInput(company.webtest_deadline)}
+                  onChange={(e) => patchCompany({ webtest_deadline: e.target.value || null })}
+                  className={inputClass}
+                />
+              </Field>
+              <div className="flex flex-col justify-end gap-2">
+                {company.webtest_deadline && (
+                  <span
+                    className={`inline-block w-fit rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                      TONE_CLASSES[deadlineTone(wtDays)]
+                    }`}
+                  >
+                    {countdownLabel(wtDays)}
+                  </span>
+                )}
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={company.webtest_done}
+                    onChange={toggleWebtestDone}
+                    className="h-4 w-4 accent-emerald-500"
+                  />
+                  Webテスト完了
+                </label>
+              </div>
+            </div>
+
+            {/* メモ */}
+            <Field label="自由メモ">
+              <textarea
+                value={company.memo ?? ""}
+                onChange={(e) => patchCompany({ memo: e.target.value })}
+                onBlur={saveInfo}
+                rows={4}
+                className={inputClass}
+                placeholder="OB訪問の内容、選考の感触など（フォーカスを外すと自動保存）"
+              />
+            </Field>
+          </div>
+        </Card>
+
+        {/* 選考フロー編集 */}
+        <Card>
+          <h2 className="mb-4 font-bold">選考フロー編集</h2>
+
+          <div className="mb-4 flex gap-2">
+            <input
+              value={newStep}
+              onChange={(e) => setNewStep(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addStep()}
+              className={inputClass}
+              placeholder="ステップ名（例: GD, 一次面接）"
+            />
+            <Button type="button" onClick={addStep} disabled={!newStep.trim()} className="shrink-0">
+              <Plus size={15} /> 追加
+            </Button>
+          </div>
+
+          {ordered.length === 0 ? (
+            <p className="py-8 text-center text-sm text-slate-400">
+              ステップがありません。上から追加してください。
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {ordered.map((s, i) => {
+                const dDays = daysUntil(s.deadline);
+                return (
+                  <div
+                    key={s.id}
+                    className="rounded-xl border border-slate-200 p-3 dark:border-slate-700"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="flex flex-col">
+                        <button
+                          onClick={() => move(s.id, -1)}
+                          disabled={i === 0}
+                          className="text-slate-400 hover:text-brand-sky disabled:opacity-30"
+                          aria-label="上へ"
+                        >
+                          <ChevronUp size={16} />
+                        </button>
+                        <button
+                          onClick={() => move(s.id, 1)}
+                          disabled={i === ordered.length - 1}
+                          className="text-slate-400 hover:text-brand-sky disabled:opacity-30"
+                          aria-label="下へ"
+                        >
+                          <ChevronDown size={16} />
+                        </button>
+                      </div>
+                      <input
+                        value={s.name}
+                        onChange={(e) =>
+                          setSteps((prev) =>
+                            prev.map((x) => (x.id === s.id ? { ...x, name: e.target.value } : x))
+                          )
+                        }
+                        onBlur={(e) => updateStep(s.id, { name: e.target.value })}
+                        className={`${inputClass} font-medium`}
+                      />
+                      <button
+                        onClick={() => deleteStep(s.id)}
+                        aria-label="削除"
+                        className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/30"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <label className="text-xs text-slate-500 dark:text-slate-400">
+                        ステータス
+                        <select
+                          value={s.status}
+                          onChange={(e) => updateStep(s.id, { status: e.target.value as StepStatus })}
+                          className={`${inputClass} mt-1 ${stepStatusColor[s.status]}`}
+                        >
+                          {Object.entries(STEP_STATUS_LABELS).map(([k, v]) => (
+                            <option key={k} value={k}>
+                              {v}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="text-xs text-slate-500 dark:text-slate-400">
+                        予定日時
+                        <input
+                          type="datetime-local"
+                          value={toDateTimeInput(s.date)}
+                          onChange={(e) =>
+                            updateStep(s.id, {
+                              date: e.target.value ? new Date(e.target.value).toISOString() : null,
+                            })
+                          }
+                          className={`${inputClass} mt-1`}
+                        />
+                      </label>
+                      <label className="text-xs text-slate-500 dark:text-slate-400">
+                        締切
+                        <input
+                          type="date"
+                          value={toDateInput(s.deadline)}
+                          onChange={(e) => updateStep(s.id, { deadline: e.target.value || null })}
+                          className={`${inputClass} mt-1`}
+                        />
+                      </label>
+                      <div className="flex items-end">
+                        {s.deadline && (
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                              TONE_CLASSES[deadlineTone(dDays)]
+                            }`}
+                          >
+                            {countdownLabel(dDays)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <input
+                      value={s.memo ?? ""}
+                      onChange={(e) =>
+                        setSteps((prev) =>
+                          prev.map((x) => (x.id === s.id ? { ...x, memo: e.target.value } : x))
+                        )
+                      }
+                      onBlur={(e) => updateStep(s.id, { memo: e.target.value })}
+                      className={`${inputClass} mt-2`}
+                      placeholder="ステップ別メモ"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {!configured && (
+            <p className="mt-4 flex items-center gap-1 text-xs text-amber-600">
+              <Link2 size={13} /> Supabase 未設定のため保存されません。
+            </p>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+}
