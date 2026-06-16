@@ -204,6 +204,48 @@ export default function CompaniesPage() {
 
       {!configured && <ConfigBanner />}
 
+      {/* 検索 ＆ フィルタ ツールバー（企業0件・シークレットモード等でも常に表示） */}
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full sm:max-w-xs">
+          <Search
+            size={16}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+          />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className={`${inputClass} pl-9 pr-9`}
+            placeholder="企業名・業界で検索"
+            aria-label="企業を検索"
+          />
+          {query && (
+            <button
+              onClick={() => setQuery("")}
+              aria-label="検索をクリア"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700"
+            >
+              <X size={15} />
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          {STATUS_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setStatusFilter(f.value)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                statusFilter === f.value
+                  ? "brand-gradient text-white shadow-sm"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {!hasCompanies ? (
         <EmptyState
           title="まだ企業が登録されていません"
@@ -216,48 +258,6 @@ export default function CompaniesPage() {
         />
       ) : (
         <>
-          {/* 検索 ＆ フィルタ ツールバー */}
-          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative w-full sm:max-w-xs">
-              <Search
-                size={16}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-              />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className={`${inputClass} pl-9 pr-9`}
-                placeholder="企業名・業界で検索"
-                aria-label="企業を検索"
-              />
-              {query && (
-                <button
-                  onClick={() => setQuery("")}
-                  aria-label="検索をクリア"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700"
-                >
-                  <X size={15} />
-                </button>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-1.5">
-              {STATUS_FILTERS.map((f) => (
-                <button
-                  key={f.value}
-                  onClick={() => setStatusFilter(f.value)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                    statusFilter === f.value
-                      ? "brand-gradient text-white shadow-sm"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {filtered.length === 0 ? (
             <EmptyState
               title="該当する企業が見つかりません"

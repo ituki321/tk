@@ -10,6 +10,7 @@ import {
   AlarmClock,
   ListChecks,
   ChevronRight,
+  Check,
 } from "lucide-react";
 import { getSupabase } from "@/lib/supabase/client";
 import { useAuth } from "@/components/useAuth";
@@ -30,6 +31,9 @@ interface DeadlineItem {
   label: string;
   companyId: string;
   days: number;
+  // ワンタップ完了の対象（step ならステップ、webtest なら企業の Webテスト）
+  kind: "step" | "webtest";
+  targetId: string;
 }
 
 export default function DashboardPage() {
@@ -92,6 +96,8 @@ export default function DashboardPage() {
             label: `${c?.name ?? "企業"}：${s.name} 締切`,
             companyId: s.company_id,
             days: d,
+            kind: "step",
+            targetId: s.id,
           });
         }
       }
@@ -105,12 +111,39 @@ export default function DashboardPage() {
             label: `${c.name}：Webテスト締切`,
             companyId: c.id,
             days: d,
+            kind: "webtest",
+            targetId: c.id,
           });
         }
       }
     }
     return items.sort((a, b) => a.days - b.days);
   }, [steps, companies]);
+
+  // 締切カウントダウンからワンタップで完了 → リストから即時に消える（楽観的更新）
+  const completeDeadline = useCallback(
+    async (item: DeadlineItem) => {
+      if (item.kind === "step") {
+        setSteps((prev) =>
+          prev.map((s) => (s.id === item.targetId ? { ...s, status: "done" as const } : s))
+        );
+        if (configured) {
+          await getSupabase().from("steps").update({ status: "done" }).eq("id", item.targetId);
+        }
+      } else {
+        setCompanies((prev) =>
+          prev.map((c) => (c.id === item.targetId ? { ...c, webtest_done: true } : c))
+        );
+        if (configured) {
+          await getSupabase()
+            .from("companies")
+            .update({ webtest_done: true })
+            .eq("id", item.targetId);
+        }
+      }
+    },
+    [configured]
+  );
 
   const todos = useMemo(() => {
     const list: { key: string; label: string; companyId: string }[] = [];
@@ -188,16 +221,24 @@ export default function DashboardPage() {
             ) : (
               <ul className="space-y-2">
                 {deadlines.slice(0, 8).map((d) => (
-                  <li key={d.key}>
+                  <li key={d.key} className="flex items-center gap-1">
                     <Link
                       href={`/companies/${d.companyId}`}
-                      className="flex items-center justify-between gap-2 rounded-xl px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700/50"
+                      className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-xl px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700/50"
                     >
                       <span className="min-w-0 truncate text-sm">{d.label}</span>
                       <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${TONE_CLASSES[deadlineTone(d.days)]}`}>
                         {countdownLabel(d.days)}
                       </span>
                     </Link>
+                    <button
+                      onClick={() => completeDeadline(d)}
+                      aria-label="完了にする"
+                      title="完了にする"
+                      className="shrink-0 rounded-lg p-1.5 text-slate-400 transition hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400"
+                    >
+                      <Check size={16} />
+                    </button>
                   </li>
                 ))}
               </ul>
