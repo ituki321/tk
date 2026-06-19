@@ -121,15 +121,15 @@ export default function DashboardPage() {
     return items.sort((a, b) => a.days - b.days);
   }, [steps, companies]);
 
-  // 締切カウントダウンからワンタップで完了 → リストから即時に消える（楽観的更新）
+  // 締切カウントダウンからワンタップで「結果待ち」へ → リストから即時に消える（楽観的更新）
   const completeDeadline = useCallback(
     async (item: DeadlineItem) => {
       if (item.kind === "step") {
         setSteps((prev) =>
-          prev.map((s) => (s.id === item.targetId ? { ...s, status: "done" as const } : s))
+          prev.map((s) => (s.id === item.targetId ? { ...s, status: "waiting" as const } : s))
         );
         if (configured) {
-          await getSupabase().from("steps").update({ status: "done" }).eq("id", item.targetId);
+          await getSupabase().from("steps").update({ status: "waiting" }).eq("id", item.targetId);
         }
       } else {
         setCompanies((prev) =>
@@ -247,11 +247,11 @@ export default function DashboardPage() {
                     </Link>
                     <button
                       onClick={() => completeDeadline(d)}
-                      aria-label="完了にする"
-                      title="完了にする"
-                      className="shrink-0 rounded-lg p-1.5 text-slate-400 transition hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400"
+                      aria-label="結果待ちにする"
+                      title={d.kind === "webtest" ? "完了にする" : "結果待ちにする"}
+                      className="shrink-0 rounded-lg p-1.5 text-slate-400 transition hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-900/30 dark:hover:text-violet-400"
                     >
-                      <Check size={16} />
+                      {d.kind === "webtest" ? <Check size={16} /> : <Hourglass size={16} />}
                     </button>
                   </li>
                 ))}

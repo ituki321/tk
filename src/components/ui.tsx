@@ -112,7 +112,7 @@ export function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="block">
+    <label className="block min-w-0">
       <span className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">
         {label}
       </span>
@@ -122,7 +122,7 @@ export function Field({
 }
 
 export const inputClass =
-  "w-full rounded-xl border border-slate-300 bg-white/80 px-3 py-2 text-sm outline-none transition focus:border-brand-sky focus:ring-2 focus:ring-brand-sky/30 dark:border-slate-600 dark:bg-slate-700/60 dark:text-slate-100";
+  "w-full min-w-0 box-border max-w-full rounded-xl border border-slate-300 bg-white/80 px-3 py-2 text-sm outline-none transition focus:border-brand-sky focus:ring-2 focus:ring-brand-sky/30 dark:border-slate-600 dark:bg-slate-700/60 dark:text-slate-100";
 
 export function Spinner() {
   return (

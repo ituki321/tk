@@ -431,7 +431,7 @@ export default function CompanyDetailPage() {
                     </div>
 
                     <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      <label className="text-xs text-slate-500 dark:text-slate-400">
+                      <label className="block min-w-0 text-xs text-slate-500 dark:text-slate-400">
                         ステータス
                         <select
                           value={s.status}
@@ -445,7 +445,7 @@ export default function CompanyDetailPage() {
                           ))}
                         </select>
                       </label>
-                      <label className="text-xs text-slate-500 dark:text-slate-400">
+                      <label className="block min-w-0 text-xs text-slate-500 dark:text-slate-400">
                         予定日時
                         <input
                           type="datetime-local"
@@ -458,7 +458,7 @@ export default function CompanyDetailPage() {
                           className={`${inputClass} mt-1`}
                         />
                       </label>
-                      <label className="text-xs text-slate-500 dark:text-slate-400">
+                      <label className="block min-w-0 text-xs text-slate-500 dark:text-slate-400">
                         締切
                         <input
                           type="date"
@@ -467,7 +467,7 @@ export default function CompanyDetailPage() {
                           className={`${inputClass} mt-1`}
                         />
                       </label>
-                      <div className="flex items-end">
+                      <div className="flex min-w-0 items-end">
                         {s.deadline && (
                           <span
                             className={`rounded-full px-2.5 py-1 text-xs font-medium ${
