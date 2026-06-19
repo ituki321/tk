@@ -1,11 +1,12 @@
 "use client";
 
-import { Check, X } from "lucide-react";
+import { Check, X, Hourglass } from "lucide-react";
 import type { Step } from "@/lib/types";
 
 const dotStyle: Record<string, string> = {
   done: "bg-emerald-500 text-white",
   current: "bg-orange-500 text-white pulse-current",
+  waiting: "bg-violet-500 text-white",
   failed: "bg-red-500 text-white",
   pending: "bg-slate-300 text-slate-500 dark:bg-slate-600 dark:text-slate-300",
 };
@@ -13,12 +14,13 @@ const dotStyle: Record<string, string> = {
 const lineStyle: Record<string, string> = {
   done: "bg-emerald-500",
   current: "bg-orange-400",
+  waiting: "bg-violet-400",
   failed: "bg-red-400",
   pending: "bg-slate-300 dark:bg-slate-600",
 };
 
 /**
- * 選考フローの進捗バー。done=緑チェック / current=オレンジ点滅 / pending=グレー / failed=赤
+ * 選考フローの進捗バー。done=緑チェック / current=オレンジ点滅 / waiting=紫（結果待ち） / pending=グレー / failed=赤
  */
 export default function FlowProgress({
   steps,
@@ -48,6 +50,8 @@ export default function FlowProgress({
                 <Check size={compact ? 12 : 16} />
               ) : s.status === "failed" ? (
                 <X size={compact ? 12 : 16} />
+              ) : s.status === "waiting" ? (
+                <Hourglass size={compact ? 11 : 14} />
               ) : (
                 i + 1
               )}

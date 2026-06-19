@@ -11,6 +11,7 @@ import {
   ListChecks,
   ChevronRight,
   Check,
+  Hourglass,
 } from "lucide-react";
 import { getSupabase } from "@/lib/supabase/client";
 import { useAuth } from "@/components/useAuth";
@@ -87,7 +88,7 @@ export default function DashboardPage() {
   const deadlines = useMemo<DeadlineItem[]>(() => {
     const items: DeadlineItem[] = [];
     for (const s of steps) {
-      if (s.deadline && s.status !== "done" && s.status !== "failed") {
+      if (s.deadline && s.status !== "done" && s.status !== "failed" && s.status !== "waiting") {
         const d = daysUntil(s.deadline);
         if (d !== null && d >= 0) {
           const c = companies.find((x) => x.id === s.company_id);
@@ -148,6 +149,8 @@ export default function DashboardPage() {
   const todos = useMemo(() => {
     const list: { key: string; label: string; companyId: string }[] = [];
     for (const s of steps) {
+      // 結果待ちは「自分がやること」ではないので今日やることには出さない
+      if (s.status === "waiting") continue;
       if (s.status === "current") {
         const c = companies.find((x) => x.id === s.company_id);
         list.push({ key: `cur-${s.id}`, label: `${c?.name ?? "企業"}：${s.name}（進行中）`, companyId: s.company_id });
@@ -159,6 +162,17 @@ export default function DashboardPage() {
       }
     }
     return list.slice(0, 8);
+  }, [steps, companies]);
+
+  // 結果待ち（選考の結果を待っているステップ）。今日やることとは分けて表示する。
+  const waitings = useMemo(() => {
+    const list: { key: string; label: string; companyId: string }[] = [];
+    for (const s of steps) {
+      if (s.status !== "waiting") continue;
+      const c = companies.find((x) => x.id === s.company_id);
+      list.push({ key: `wait-${s.id}`, label: `${c?.name ?? "企業"}：${s.name}`, companyId: s.company_id });
+    }
+    return list;
   }, [steps, companies]);
 
   if (!ready || (configured && loading)) return <Spinner />;
@@ -219,8 +233,8 @@ export default function DashboardPage() {
             {deadlines.length === 0 ? (
               <p className="py-6 text-center text-sm text-slate-400">直近の締切はありません</p>
             ) : (
-              <ul className="space-y-2">
-                {deadlines.slice(0, 8).map((d) => (
+              <ul className="-mr-1 max-h-80 space-y-2 overflow-y-auto pr-1">
+                {deadlines.map((d) => (
                   <li key={d.key} className="flex items-center gap-1">
                     <Link
                       href={`/companies/${d.companyId}`}
@@ -246,7 +260,7 @@ export default function DashboardPage() {
           </Card>
 
           {/* 今日やること */}
-          <Card className="lg:col-span-2">
+          <Card className="lg:col-span-1">
             <div className="mb-3 flex items-center gap-2 font-bold">
               <ListChecks size={18} className="text-brand-sky" /> 今日やること
             </div>
@@ -262,6 +276,30 @@ export default function DashboardPage() {
                     >
                       <span className="h-2 w-2 shrink-0 rounded-full bg-brand-sky" />
                       <span className="min-w-0 truncate text-sm">{t.label}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          {/* 結果待ち */}
+          <Card className="lg:col-span-1">
+            <div className="mb-3 flex items-center gap-2 font-bold">
+              <Hourglass size={18} className="text-violet-500" /> 結果待ち
+            </div>
+            {waitings.length === 0 ? (
+              <p className="py-6 text-center text-sm text-slate-400">結果待ちの選考はありません</p>
+            ) : (
+              <ul className="-mr-1 max-h-80 space-y-2 overflow-y-auto pr-1">
+                {waitings.map((w) => (
+                  <li key={w.key}>
+                    <Link
+                      href={`/companies/${w.companyId}`}
+                      className="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700/50"
+                    >
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-violet-500" />
+                      <span className="min-w-0 truncate text-sm">{w.label}</span>
                     </Link>
                   </li>
                 ))}

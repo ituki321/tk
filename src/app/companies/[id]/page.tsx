@@ -32,6 +32,7 @@ import FlowProgress from "@/components/FlowProgress";
 const stepStatusColor: Record<StepStatus, string> = {
   pending: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
   current: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+  waiting: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
   done: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
   failed: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
 };

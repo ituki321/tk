@@ -1,5 +1,5 @@
 export type CompanyStatus = "active" | "offer" | "rejected" | "done";
-export type StepStatus = "pending" | "current" | "done" | "failed";
+export type StepStatus = "pending" | "current" | "waiting" | "done" | "failed";
 
 export interface Company {
   id: string;
@@ -50,6 +50,7 @@ export const STATUS_LABELS: Record<CompanyStatus, string> = {
 export const STEP_STATUS_LABELS: Record<StepStatus, string> = {
   pending: "未着手",
   current: "進行中",
+  waiting: "結果待ち",
   done: "通過",
   failed: "不通過",
 };

@@ -1,26 +1,289 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* クラスベースのダークモード（ThemeToggle が <html> に .dark を付与する） */
+@custom-variant dark (&:where(.dark, .dark *));
 
-@theme inline {
+@theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+
+  /* ブランドカラー（text-brand-sky / bg-brand-navy などで利用） */
+  --color-brand-sky: #38bdf8;
+  --color-brand-navy: #1a2980;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  --background: #f5f7fb;
+  --foreground: #0f172a;
+
+  /* ブランドグラデーションの停止色 */
+  --brand-from: #1a2980;
+  --brand-via: #2563eb;
+  --brand-to: #26d0ce;
+}
+
+.dark {
+  --background: #0b1120;
+  --foreground: #e2e8f0;
 }
 
 body {
-  background: var(--background);
+  min-height: 100vh;
+  background:
+    radial-gradient(900px 500px at 110% -10%, color-mix(in srgb, var(--brand-to) 14%, transparent), transparent),
+    radial-gradient(800px 500px at -10% 0%, color-mix(in srgb, var(--brand-from) 10%, transparent), transparent),
+    var(--background);
+  background-attachment: fixed;
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif;
+}
+
+/* ===== ブランド ===== */
+.brand-gradient {
+  background-image: linear-gradient(
+    135deg,
+    var(--brand-from) 0%,
+    var(--brand-via) 55%,
+    var(--brand-to) 100%
+  );
+}
+.brand-text {
+  background-image: linear-gradient(135deg, var(--brand-from), var(--brand-via), var(--brand-to));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ===== ガラスカード ===== */
+.glass {
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 30px -16px rgba(15, 23, 42, 0.25);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.dark .glass {
+  background: rgba(30, 41, 59, 0.55);
+  border-color: rgba(148, 163, 184, 0.14);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 10px 30px -16px rgba(0, 0, 0, 0.65);
+}
+
+/* ===== アニメーション ===== */
+@keyframes pulseCurrent {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(249, 115, 22, 0);
+  }
+}
+.pulse-current {
+  animation: pulseCurrent 1.6s ease-in-out infinite;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fade-in {
+  animation: fadeIn 0.35s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-current,
+  .fade-in {
+    animation: none;
+  }
+}
+
+/* ===== react-big-calendar モダンテーマ ===== */
+.rbc-calendar {
+  font-family: inherit;
+  color: var(--foreground);
+}
+
+/* ツールバー */
+.rbc-toolbar {
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+.rbc-toolbar .rbc-toolbar-label {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.rbc-toolbar button {
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  border-radius: 0.65rem;
+  padding: 0.35rem 0.85rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+.rbc-toolbar button:hover,
+.rbc-toolbar button:focus {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+.rbc-toolbar button.rbc-active,
+.rbc-toolbar button.rbc-active:hover,
+.rbc-toolbar button.rbc-active:focus {
+  background-image: linear-gradient(135deg, var(--brand-from), var(--brand-via));
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 2px 8px -2px rgba(37, 99, 235, 0.55);
+}
+.rbc-btn-group {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+.rbc-btn-group > button + button {
+  margin-left: 0;
+}
+
+/* 曜日ヘッダー */
+.rbc-header {
+  padding: 0.55rem 0;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: #64748b;
+  border-bottom: 1px solid #eef2f7;
+}
+.rbc-header + .rbc-header {
+  border-left: none;
+}
+
+/* 枠線をやわらかく＋角丸 */
+.rbc-month-view,
+.rbc-time-view,
+.rbc-agenda-view table.rbc-agenda-table {
+  border: 1px solid #eef2f7;
+  border-radius: 1rem;
+  overflow: hidden;
+  background: #ffffff;
+}
+.rbc-month-row + .rbc-month-row {
+  border-top: 1px solid #f1f5f9;
+}
+.rbc-day-bg + .rbc-day-bg {
+  border-left: 1px solid #f1f5f9;
+}
+.rbc-off-range-bg {
+  background: #f8fafc;
+}
+.rbc-off-range {
+  color: #cbd5e1;
+}
+.rbc-date-cell {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+/* 今日のセル＆日付 */
+.rbc-today {
+  background: color-mix(in srgb, var(--brand-sky) 12%, transparent);
+}
+.rbc-now .rbc-button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6rem;
+  height: 1.6rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  font-weight: 700;
+  color: #ffffff;
+  background-image: linear-gradient(135deg, var(--brand-from), var(--brand-via));
+}
+
+/* イベント */
+.rbc-event {
+  border: none !important;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  padding: 1px 5px;
+}
+.rbc-event:focus {
+  outline: 2px solid var(--brand-sky);
+  outline-offset: 1px;
+}
+.rbc-show-more {
+  color: var(--brand-navy);
+  font-weight: 600;
+  background: transparent;
+}
+
+/* 週・日・予定リスト */
+.rbc-time-view .rbc-header,
+.rbc-time-header-content,
+.rbc-time-content,
+.rbc-timeslot-group,
+.rbc-agenda-view table.rbc-agenda-table td,
+.rbc-agenda-view table.rbc-agenda-table th {
+  border-color: #eef2f7;
+}
+.rbc-current-time-indicator {
+  background: #ef4444;
+  height: 2px;
+}
+
+/* ---- ダークモード ---- */
+.dark .rbc-toolbar button {
+  background: #1e293b;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+.dark .rbc-toolbar button:hover,
+.dark .rbc-toolbar button:focus {
+  background: #334155;
+  color: #ffffff;
+}
+.dark .rbc-month-view,
+.dark .rbc-time-view,
+.dark .rbc-agenda-view table.rbc-agenda-table {
+  background: #0f172a;
+  border-color: #1e293b;
+}
+.dark .rbc-header {
+  color: #94a3b8;
+  border-color: #1e293b;
+}
+.dark .rbc-month-row + .rbc-month-row,
+.dark .rbc-day-bg + .rbc-day-bg,
+.dark .rbc-time-content,
+.dark .rbc-timeslot-group,
+.dark .rbc-agenda-view table.rbc-agenda-table td,
+.dark .rbc-agenda-view table.rbc-agenda-table th {
+  border-color: #1e293b;
+}
+.dark .rbc-off-range-bg {
+  background: #0b1120;
+}
+.dark .rbc-off-range {
+  color: #475569;
+}
+.dark .rbc-date-cell,
+.dark .rbc-button-link {
+  color: #cbd5e1;
+}
+.dark .rbc-today {
+  background: color-mix(in srgb, var(--brand-sky) 16%, transparent);
+}
+.dark .rbc-show-more {
+  color: var(--brand-sky);
 }
