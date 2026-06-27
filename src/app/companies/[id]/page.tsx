@@ -12,6 +12,8 @@ import {
   ChevronDown,
   Save,
   Link2,
+  Check,
+  X,
 } from "lucide-react";
 import { getSupabase } from "@/lib/supabase/client";
 import { useAuth } from "@/components/useAuth";
@@ -134,6 +136,19 @@ export default function CompanyDetailPage() {
   async function updateStep(stepId: string, patch: Partial<Step>) {
     setSteps((prev) => prev.map((s) => (s.id === stepId ? { ...s, ...patch } : s)));
     await getSupabase().from("steps").update(patch).eq("id", stepId);
+  }
+
+  // 結果待ちステップを「通過」「不通」で即確定する。
+  // 不通の場合は企業ステータスも不通過にして、紐づくインターン日程をカレンダーから自動的に消す。
+  async function markStepResult(stepId: string, result: "done" | "failed") {
+    await updateStep(stepId, { status: result });
+    if (result === "failed" && company && company.status !== "rejected") {
+      patchCompany({ status: "rejected" });
+      await getSupabase()
+        .from("companies")
+        .update({ status: "rejected" })
+        .eq("id", company.id);
+    }
   }
 
   async function deleteStep(stepId: string) {
@@ -479,6 +494,25 @@ export default function CompanyDetailPage() {
                         )}
                       </div>
                     </div>
+
+                    {s.status === "waiting" && (
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => markStepResult(s.id, "done")}
+                          className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-emerald-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-600"
+                        >
+                          <Check size={15} /> 通過
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => markStepResult(s.id, "failed")}
+                          className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-red-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-red-600"
+                        >
+                          <X size={15} /> 不通
+                        </button>
+                      </div>
+                    )}
 
                     <input
                       value={s.memo ?? ""}

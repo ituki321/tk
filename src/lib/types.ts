@@ -32,6 +32,7 @@ export interface Step {
 export interface Internship {
   id: string;
   user_id: string;
+  company_id: string | null; // 企業登録から作られたインターンは企業に紐づく（不通過で自動非表示にするため）
   company_name: string;
   start_date: string | null;
   end_date: string | null;

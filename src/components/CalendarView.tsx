@@ -12,14 +12,14 @@ import withDragAndDrop, {
 } from "react-big-calendar/lib/addons/dragAndDrop";
 import { format, parse, startOfWeek, getDay } from "date-fns";
 import { ja } from "date-fns/locale";
-import { CalendarPlus, Download, Trash2, ExternalLink } from "lucide-react";
+import { CalendarPlus, Download, Trash2, ExternalLink, Check, X } from "lucide-react";
 
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
 
 import { getSupabase } from "@/lib/supabase/client";
 import { useAuth } from "@/components/useAuth";
-import type { Company, Step, StepStatus } from "@/lib/types";
+import type { Company, Internship, Step, StepStatus } from "@/lib/types";
 import { normalizeUrl } from "@/lib/url";
 import { downloadICS, type ICSEvent } from "@/lib/ics";
 import {
@@ -40,7 +40,7 @@ const localizer = dateFnsLocalizer({
   locales: { ja },
 });
 
-type CalType = "step" | "deadline" | "webtest";
+type CalType = "step" | "deadline" | "webtest" | "intern";
 
 interface CalEvent {
   id: string;
@@ -61,6 +61,7 @@ const typeColor: Record<CalType, string> = {
   step: "#1a2980",
   deadline: "#ef4444",
   webtest: "#f59e0b",
+  intern: "#14b8a6",
 };
 const statusColor: Partial<Record<StepStatus, string>> = {
   done: "#10b981",
@@ -92,6 +93,7 @@ export default function CalendarView() {
   const { ready, configured, userId } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [steps, setSteps] = useState<Step[]>([]);
+  const [internships, setInternships] = useState<Internship[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>("month");
   const [date, setDate] = useState(new Date());
@@ -110,12 +112,14 @@ export default function CalendarView() {
   const load = useCallback(async () => {
     if (!configured) return;
     const supabase = getSupabase();
-    const [c, s] = await Promise.all([
+    const [c, s, it] = await Promise.all([
       supabase.from("companies").select("*"),
       supabase.from("steps").select("*"),
+      supabase.from("internships").select("*"),
     ]);
     setCompanies((c.data as Company[]) ?? []);
     setSteps((s.data as Step[]) ?? []);
+    setInternships((it.data as Internship[]) ?? []);
     setLoading(false);
   }, [configured]);
 
@@ -177,8 +181,30 @@ export default function CalendarView() {
         });
       }
     }
+    // インターン日程。不通過（rejected）の企業に紐づくものはカレンダーから自動的に消す。
+    const rejectedCompanyIds = new Set(
+      companies.filter((c) => c.status === "rejected").map((c) => c.id)
+    );
+    for (const it of internships) {
+      if (!it.start_date) continue;
+      if (it.company_id && rejectedCompanyIds.has(it.company_id)) continue;
+      const start = new Date(`${it.start_date}T00:00:00`);
+      // 終日イベントの end は排他的なので、終了日（無ければ開始日）の翌日0時にする
+      const endBase = new Date(`${it.end_date ?? it.start_date}T00:00:00`);
+      const end = new Date(endBase.getTime() + 24 * 60 * 60 * 1000);
+      list.push({
+        id: `intern-${it.id}`,
+        title: `🎓 ${it.company_name}：インターン`,
+        start,
+        end,
+        allDay: true,
+        type: "intern",
+        companyId: it.company_id ?? "",
+        companyName: it.company_name,
+      });
+    }
     return list;
-  }, [steps, companies, companyName]);
+  }, [steps, companies, internships, companyName]);
 
   const eventStyle = useCallback((event: CalEvent) => {
     const bg =
@@ -272,6 +298,27 @@ export default function CalendarView() {
     load();
   }
 
+  // 結果待ちステップをカレンダー上で即「通過」「不通」に。不通なら企業を不通過にしてインターン日程を消す。
+  async function markResult(result: "done" | "failed") {
+    if (!editEvent?.stepId) return;
+    const supabase = getSupabase();
+    await supabase.from("steps").update({ status: result }).eq("id", editEvent.stepId);
+    setSteps((prev) =>
+      prev.map((s) => (s.id === editEvent.stepId ? { ...s, status: result } : s))
+    );
+    if (result === "failed") {
+      const cid = editEvent.companyId;
+      const c = companies.find((x) => x.id === cid);
+      if (c && c.status !== "rejected") {
+        setCompanies((prev) =>
+          prev.map((x) => (x.id === cid ? { ...x, status: "rejected" } : x))
+        );
+        await supabase.from("companies").update({ status: "rejected" }).eq("id", cid);
+      }
+    }
+    setEditEvent(null);
+  }
+
   async function deleteEditEvent() {
     if (!editEvent?.stepId || !confirm("この予定（ステップ）を削除しますか？")) return;
     await getSupabase().from("steps").delete().eq("id", editEvent.stepId);
@@ -325,6 +372,9 @@ export default function CalendarView() {
         </span>
         <span className="flex items-center gap-1">
           <span className="inline-block h-3 w-3 rounded" style={{ background: "#f59e0b" }} /> Webテスト〆
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-3 w-3 rounded" style={{ background: "#14b8a6" }} /> インターン
         </span>
       </div>
 
@@ -414,6 +464,29 @@ export default function CalendarView() {
 
             {editEvent.type === "step" ? (
               <>
+                {editEvent.status === "waiting" && (
+                  <div>
+                    <p className="mb-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
+                      結果待ち — 選考結果を記録
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => markResult("done")}
+                        className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-emerald-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-600"
+                      >
+                        <Check size={15} /> 通過
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => markResult("failed")}
+                        className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-red-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-red-600"
+                      >
+                        <X size={15} /> 不通
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <Field label="日時">
                   <input
                     type="datetime-local"
@@ -440,7 +513,9 @@ export default function CalendarView() {
             ) : (
               <div className="space-y-3">
                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                  これは締切の予定です。日程の変更は企業詳細ページから行えます。
+                  {editEvent.type === "intern"
+                    ? "これはインターンの日程です。編集・削除はインターンページから行えます。"
+                    : "これは締切の予定です。日程の変更は企業詳細ページから行えます。"}
                 </p>
                 {editCompany &&
                   editEvent.type === "webtest" &&

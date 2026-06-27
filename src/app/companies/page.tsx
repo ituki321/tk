@@ -11,6 +11,7 @@ import {
   Search,
   Pencil,
   X,
+  CalendarRange,
 } from "lucide-react";
 import { getSupabase } from "@/lib/supabase/client";
 import { useAuth } from "@/components/useAuth";
@@ -66,6 +67,24 @@ export default function CompaniesPage() {
   const [templateId, setTemplateId] = useState("shinsotsu");
   const [saving, setSaving] = useState(false);
 
+  // 企業登録時に同時に登録するインターン日程（複数可）
+  const [internDates, setInternDates] = useState<
+    { start: string; end: string; content: string }[]
+  >([]);
+
+  function addInternRow() {
+    setInternDates((rows) => [...rows, { start: "", end: "", content: "" }]);
+  }
+  function updateInternRow(
+    idx: number,
+    patch: Partial<{ start: string; end: string; content: string }>
+  ) {
+    setInternDates((rows) => rows.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  }
+  function removeInternRow(idx: number) {
+    setInternDates((rows) => rows.filter((_, i) => i !== idx));
+  }
+
   const load = useCallback(async () => {
     if (!configured) return;
     const supabase = getSupabase();
@@ -110,6 +129,7 @@ export default function CompaniesPage() {
     setPriority(3);
     setStatus("active");
     setTemplateId("shinsotsu");
+    setInternDates([]);
   }
 
   function openCreate() {
@@ -171,6 +191,20 @@ export default function CompaniesPage() {
             status: i === 0 ? "current" : "pending",
           }));
           await supabase.from("steps").insert(rows);
+        }
+        // インターン日程（開始日が入っている行だけ）を企業に紐づけて登録
+        const internRows = internDates
+          .filter((r) => r.start)
+          .map((r) => ({
+            user_id: userId,
+            company_id: data.id,
+            company_name: name.trim(),
+            start_date: r.start,
+            end_date: r.end || null,
+            content: r.content.trim() || null,
+          }));
+        if (internRows.length > 0) {
+          await supabase.from("internships").insert(internRows);
         }
       }
     }
@@ -413,6 +447,73 @@ export default function CompaniesPage() {
                 ))}
               </select>
             </Field>
+          )}
+          {!editingId && (
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
+                  <CalendarRange size={14} className="text-brand-sky" /> インターン！日程（複数可）
+                </span>
+                <button
+                  type="button"
+                  onClick={addInternRow}
+                  className="flex items-center gap-1 text-xs font-medium text-brand-sky hover:underline"
+                >
+                  <Plus size={13} /> 日程を追加
+                </button>
+              </div>
+              {internDates.length === 0 ? (
+                <p className="text-xs text-slate-400">
+                  「日程を追加」でインターンの予定を登録できます（カレンダーに表示されます）。
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {internDates.map((r, i) => (
+                    <div
+                      key={i}
+                      className="rounded-xl border border-slate-200 p-2.5 dark:border-slate-700"
+                    >
+                      <div className="flex items-start gap-2">
+                        <div className="grid flex-1 grid-cols-2 gap-2">
+                          <label className="block text-[11px] text-slate-500 dark:text-slate-400">
+                            開始日
+                            <input
+                              type="date"
+                              value={r.start}
+                              onChange={(e) => updateInternRow(i, { start: e.target.value })}
+                              className={`${inputClass} mt-1`}
+                            />
+                          </label>
+                          <label className="block text-[11px] text-slate-500 dark:text-slate-400">
+                            終了日
+                            <input
+                              type="date"
+                              value={r.end}
+                              onChange={(e) => updateInternRow(i, { end: e.target.value })}
+                              className={`${inputClass} mt-1`}
+                            />
+                          </label>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeInternRow(i)}
+                          aria-label="この日程を削除"
+                          className="mt-4 shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/30"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                      <input
+                        value={r.content}
+                        onChange={(e) => updateInternRow(i, { content: e.target.value })}
+                        className={`${inputClass} mt-2`}
+                        placeholder="内容・メモ（任意）"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="ghost" onClick={closeModal}>

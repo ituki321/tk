@@ -33,6 +33,7 @@ create table steps (
 create table internships (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users not null,
+  company_id uuid references companies on delete cascade, -- 企業登録時に紐づくインターン日程（null=単体登録）
   company_name text not null,
   start_date date,
   end_date date,
@@ -48,3 +49,6 @@ alter table internships enable row level security;
 create policy "own companies" on companies for all using (auth.uid() = user_id);
 create policy "own steps" on steps for all using (auth.uid() = user_id);
 create policy "own internships" on internships for all using (auth.uid() = user_id);
+
+-- ▼既存DB向けマイグレーション（一度だけ実行）：インターンを企業に紐づける
+-- alter table internships add column if not exists company_id uuid references companies on delete cascade;
